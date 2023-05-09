@@ -1,8 +1,11 @@
 from typing import Optional
 
+from sc2.ids.ability_id import AbilityId
+
 from ares import AresBot
-from sc2.data import Result
-from sc2.unit import Unit
+from ares.behaviors.mining import Mining
+
+from sc2.ids.unit_typeid import UnitTypeId as UnitID
 
 
 class MyBot(AresBot):
@@ -20,8 +23,11 @@ class MyBot(AresBot):
     async def on_step(self, iteration: int) -> None:
         await super(MyBot, self).on_step(iteration)
 
-        # step logic here ...
-        pass
+        self.register_behavior(Mining())
+
+        if iteration % 16 == 0:
+            for depot in self.structures(UnitID.SUPPLYDEPOT):
+                depot(AbilityId.MORPH_SUPPLYDEPOT_LOWER)
 
     """
     Can use `python-sc2` hooks as usual, but make a call the inherited method in the superclass
