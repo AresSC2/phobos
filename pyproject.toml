@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "ares-sc2-starter-bot"
+name = "phobos"
 version = "0.1.0"
 description = ""
 authors = []
