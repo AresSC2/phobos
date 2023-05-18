@@ -2,10 +2,12 @@ from typing import Optional
 
 from sc2.ids.ability_id import AbilityId
 
-from ares import AresBot
+from ares import AresBot, Hub
 from ares.behaviors.mining import Mining
 
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
+
+from bot.managers.orbital_manager import OrbitalManager
 
 
 class MyBot(AresBot):
@@ -33,11 +35,17 @@ class MyBot(AresBot):
     Can use `python-sc2` hooks as usual, but make a call the inherited method in the superclass
     Examples:
     """
-    # async def on_start(self) -> None:
-    #     await super(MyBot, self).on_start()
-    #
-    #     # on_start logic here ...
-    #
+
+    async def register_managers(self) -> None:
+        new_manager = OrbitalManager(self, self.config, self.mediator)
+        self.manager_hub = Hub(
+            self,
+            self.config,
+            self.mediator,
+            additional_managers=[new_manager],
+        )
+        await self.manager_hub.init_managers()
+
     # async def on_end(self, game_result: Result) -> None:
     #     await super(MyBot, self).on_end(game_result)
     #
