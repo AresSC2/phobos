@@ -2,7 +2,7 @@ from typing import Optional
 
 from sc2.ids.ability_id import AbilityId
 
-from ares import AresBot, Hub
+from ares import AresBot, Hub, ManagerMediator
 from ares.behaviors.mining import Mining
 
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
@@ -37,13 +37,15 @@ class MyBot(AresBot):
     """
 
     async def register_managers(self) -> None:
-        new_manager = OrbitalManager(self, self.config, self.mediator)
+        manager_mediator = ManagerMediator()
+        orbital_manager = OrbitalManager(self, self.config, manager_mediator)
         self.manager_hub = Hub(
             self,
             self.config,
-            self.mediator,
-            additional_managers=[new_manager],
+            manager_mediator,
+            additional_managers=[orbital_manager],
         )
+
         await self.manager_hub.init_managers()
 
     # async def on_end(self, game_result: Result) -> None:
