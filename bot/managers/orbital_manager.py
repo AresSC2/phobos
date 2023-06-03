@@ -1,12 +1,11 @@
 from typing import TYPE_CHECKING
 
+from ares import ManagerMediator
+from ares.managers.manager import Manager
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.unit import Unit
 from sc2.units import Units
-
-from ares import ManagerMediator
-from ares.managers.manager import Manager
 
 if TYPE_CHECKING:
     from ares import AresBot
@@ -41,7 +40,9 @@ class OrbitalManager(Manager):
         Basic mule logic till this can be improved.
         """
         oc_id: UnitID = UnitID.ORBITALCOMMAND
-        structures_dict: dict[UnitID, Units] = self.manager_mediator.get_own_structures_dict
+        structures_dict: dict[
+            UnitID, Units
+        ] = self.manager_mediator.get_own_structures_dict
         if oc_id not in structures_dict:
             return
 

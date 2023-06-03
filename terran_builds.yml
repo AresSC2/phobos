@@ -16,30 +16,30 @@ BuildChoices:
     test_123:
         BotName: Test
         Cycle:
-            - 111
+            - OneOneOne
 
     Protoss:
         BotName: ProtossRace
         Cycle:
-            - 111
+            - OneOneOne
 
     Random:
         BotName: RandomRace
         Cycle:
-            - 111
+            - OneOneOne
 
     Terran:
         BotName: TerranRace
         Cycle:
-            - 111
+            - OneOneOne
 
     Zerg:
         BotName: ZergRace
         Cycle:
-            - 111
+            - OneOneOne
 
 Builds:
-    111:
+    OneOneOne:
         ConstantWorkerProduction: True
         OpeningBuildOrder:
             - 14 supply @ ramp
