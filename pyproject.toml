@@ -21,3 +21,4 @@ extend-exclude = 'ares-sc2/*'
 
 [tool.isort]
 profile = "black"
+skip_glob = ["ares-sc2/*"]
