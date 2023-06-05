@@ -1,11 +1,14 @@
 from typing import TYPE_CHECKING
 
 from ares import ManagerMediator
-from ares.consts import UnitRole
+from ares.consts import DROP_ROLES, UnitRole
 from ares.managers.manager import Manager
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.unit import Unit
 from sc2.units import Units
+
+from bot.combat.base_unit import BaseUnit
+from bot.combat.medivac_mine_drops import MedivacMineDrops
 
 if TYPE_CHECKING:
     from ares import AresBot
@@ -35,23 +38,30 @@ class DropManager(Manager):
         """
         super().__init__(ai, config, mediator)
 
-        self.__assigned_111_mine_drop: bool = False
-        self.medivac_tag_to_mine_tags: dict[int, set[int]] = dict()
+        self._assigned_111_mine_drop: bool = False
+        # {med_tag : {"mine_tags: {12, 32, 55}, "target": Point2((50.0, 75.5)}}
+        self._medivac_tag_to_mine_tracker: dict[int, dict] = dict()
+
+        self._mine_drops: BaseUnit = MedivacMineDrops(ai, config, mediator)
 
     async def update(self, iteration: int) -> None:
         """
         Basic mule logic till this can be improved.
         """
         self._assign_mine_drops()
-
         self._unassign_drops()
+        self._execute_drops()
 
     def _assign_mine_drops(self) -> None:
         if (
             self.ai.build_order_runner.chosen_opening == "OneOneOne"
-            and not self.__assigned_111_mine_drop
+            and not self._assigned_111_mine_drop
         ):
+            mine_drop_target = self.ai.enemy_start_locations[0].towards(
+                self.ai.game_info.map_center, -4.0
+            )
             unit_dict: dict[UnitID, Units] = self.manager_mediator.get_own_army_dict
+
             if UnitID.MEDIVAC in unit_dict and UnitID.WIDOWMINE in unit_dict:
                 medivacs: Units = unit_dict[UnitID.MEDIVAC]
                 mines: Units = unit_dict[UnitID.WIDOWMINE]
@@ -64,23 +74,33 @@ class DropManager(Manager):
                         self.manager_mediator.assign_role(
                             tag=u.tag, role=UnitRole.DROP_UNITS_TO_LOAD
                         )
-                    self.medivac_tag_to_mine_tags[medivac.tag] = {
-                        mine.tag for mine in mines
+                    self._medivac_tag_to_mine_tracker[medivac.tag] = {
+                        "mine_tags": {mine.tag for mine in mines},
+                        "target": mine_drop_target,
                     }
 
     def _unassign_drops(self) -> None:
         # unassign units from mine drop if medivac or assigned mines have died
-        for med_tag, mine_tags in self.medivac_tag_to_mine_tags.items():
+        for med_tag, mine_tracker in self._medivac_tag_to_mine_tracker.items():
             if medivac := self.ai.unit_tag_dict.get(med_tag, None):
                 if medivac.has_cargo:
                     return
                 else:
-                    if len([m for m in self.ai.units if m.tag in mine_tags]) == 0:
+                    mines: list[Unit] = [
+                        m for m in self.ai.units if m.tag in mine_tracker["mine_tags"]
+                    ]
+                    if len(mines) == 0:
                         self.manager_mediator.assign_role(
                             tag=medivac.tag, role=UnitRole.DEFENDING
                         )
             # no medivac, reassign mines
             else:
                 self.manager_mediator.batch_assign_role(
-                    tags=mine_tags, role=UnitRole.DEFENDING
+                    tags=mine_tracker["mine_tags"], role=UnitRole.DEFENDING
                 )
+
+    def _execute_drops(self):
+        self._mine_drops.execute(
+            self.manager_mediator.get_units_from_roles(roles=DROP_ROLES),
+            medivac_tag_to_mine_tracker=self._medivac_tag_to_mine_tracker,
+        )

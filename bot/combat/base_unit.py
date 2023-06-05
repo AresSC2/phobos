@@ -24,7 +24,7 @@ class BaseUnit(Protocol):
     config: dict
     mediator: ManagerMediator
 
-    def execute(self, units: list[Unit]) -> None:
+    def execute(self, units: list[Unit], **kwargs) -> None:
         """Execute the implemented behavior.
 
         This should be called every step.
@@ -34,6 +34,8 @@ class BaseUnit(Protocol):
         units : list[Unit]
             The exact units that will be controlled by
             the implemented `BaseUnit` class.
+        **kwargs :
+            See combat subclasses docstrings for supported kwargs.
 
         """
         ...

@@ -1,22 +1,19 @@
-from typing import Optional
+from typing import Any, Optional
 
 from ares import AresBot, Hub, ManagerMediator
-from ares.behaviors.mining import Mining
-from ares.consts import DROP_ROLES, UnitRole
+from ares.behaviors.macro import Mining, SpawnController
+from ares.consts import UnitRole
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
-from sc2.position import Point2
+from sc2.unit import Unit
 
-from bot.combat.base_unit import BaseUnit
-from bot.combat.medivac_mine_drop import MedivacMineDrop
+from bot.consts import NON_COMBAT_UNIT_TYPES
 from bot.managers.drop_manager import DropManager
 from bot.managers.orbital_manager import OrbitalManager
 
 
 class MyBot(AresBot):
-    # move these out of main at some point
-    medivac_mine_drop: BaseUnit
-    mine_drop_target: Point2
+    opening_build: str
 
     def __init__(self, game_step_override: Optional[int] = None):
         """Initiate custom bot
@@ -29,30 +26,33 @@ class MyBot(AresBot):
         """
         super().__init__(game_step_override)
 
+        self.army_comp: dict[UnitID, Any] = {
+            UnitID.MARINE: {"proportion": 0.74, "priority": 3},
+            UnitID.MEDIVAC: {"proportion": 0.1, "priority": 2},
+            UnitID.RAVEN: {"proportion": 0.01, "priority": 0},
+            UnitID.SIEGETANK: {"proportion": 0.15, "priority": 1},
+        }
+        self.spawn_controller_active: bool = False
+
     async def on_start(self) -> None:
         await super(MyBot, self).on_start()
-        # TODO: Somewhere else should handle initializing and executing
-        #   combat classes? Left here for now as only this single class
-        mine_drop_target = self.enemy_start_locations[0].towards(
-            self.game_info.map_center, -4.0
-        )
-        self.medivac_mine_drop = MedivacMineDrop(
-            self, self.config, self.mediator, mine_drop_target
-        )
+
+        self.opening_build = self.build_order_runner.chosen_opening
 
     async def on_step(self, iteration: int) -> None:
         await super(MyBot, self).on_step(iteration)
-
-        # TODO: Only pass in units specific to mine drops using DropManager
-        self.medivac_mine_drop.execute(
-            self.mediator.get_units_from_roles(roles=DROP_ROLES)
-        )
-
         # for testing units get unassigned correctly, remove later
         for u in self.mediator.get_units_from_role(role=UnitRole.DEFENDING):
-            u.move(self.mediator.get_own_nat)
+            u.move(self.mediator.get_own_nat.towards(self.game_info.map_center, 12.0))
 
         self.register_behavior(Mining())
+        if self.spawn_controller_active:
+            self.register_behavior(
+                SpawnController(
+                    army_composition_dict=self.army_comp,
+                    ignore_proportions_below_unit_count=2,
+                )
+            )
 
         if iteration % 16 == 0:
             for depot in self.structures(UnitID.SUPPLYDEPOT):
@@ -71,20 +71,25 @@ class MyBot(AresBot):
 
         await self.manager_hub.init_managers()
 
+    async def on_unit_created(self, unit: Unit) -> None:
+        await super(MyBot, self).on_unit_created(unit)
+
+        # assign all units to DEFENDING role by default
+        if unit.type_id not in NON_COMBAT_UNIT_TYPES:
+            self.mediator.assign_role(tag=unit.tag, role=UnitRole.DEFENDING)
+
+    async def on_building_construction_complete(self, unit: Unit) -> None:
+        await super(MyBot, self).on_building_construction_complete(unit)
+
+        if unit.type_id == UnitID.BARRACKSREACTOR and self.opening_build == "OneOneOne":
+            self.spawn_controller_active = True
+
     # async def on_end(self, game_result: Result) -> None:
     #     await super(MyBot, self).on_end(game_result)
     #
     #     # custom on_end logic here ...
     #
-    # async def on_building_construction_complete(self, unit: Unit) -> None:
-    #     await super(MyBot, self).on_building_construction_complete(unit)
-    #
-    #     # custom on_building_construction_complete logic here ...
-    #
-    # async def on_unit_created(self, unit: Unit) -> None:
-    #     await super(MyBot, self).on_unit_created(unit)
-    #
-    #     # custom on_unit_created logic here ...
+
     #
 
     #
