@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from ares import ManagerMediator
@@ -27,7 +27,7 @@ FOUR_SECONDS: int = int(22.5 * 4)
 
 
 @dataclass
-class MedivacMineDrop(BaseUnit):
+class MedivacMineDrops(BaseUnit):
     """Execute behavior for mines and medivac in a mine drop.
 
     Parameters
@@ -38,109 +38,139 @@ class MedivacMineDrop(BaseUnit):
         Dictionary with the data from the configuration file
     mediator : ManagerMediator
         Used for getting information from managers in Ares.
-    target : Point2
-        Where mines should be dropped off.
     """
 
     ai: "AresBot"
     config: dict
     mediator: ManagerMediator
-    target: Point2
 
-    def execute(self, units: Units) -> None:
+    def execute(self, units: Units, **kwargs) -> None:
         """Execute the mine drop.
 
         Parameters
         ----------
         units : list[Unit]
             The units we want MedivacMineDrop to control.
+        **kwargs :
+            See below.
+
+        Keyword Arguments
+        -----------------
+        medivac_tag_to_mine_tracker : dict[int, dict]
+            Tracker detailing medivac tag to mine tags.
+            And target for the mine drop.
 
         """
+        assert (
+            "medivac_tag_to_mine_tracker" in kwargs
+        ), "No value for medivac_tag_to_mine_tracker was passed into kwargs."
+        # no units assigned to mine drop currently.
+        if not units:
+            return
+
+        medivac_tag_to_mine_tracker: dict[int, dict] = kwargs[
+            "medivac_tag_to_mine_tracker"
+        ]
 
         # we have the exact units, but we need to split them depending on precise job.
         unit_role_dict: dict[UnitRole, set[int]] = self.mediator.get_unit_role_dict
 
-        medivacs: list[Unit] = [
-            u for u in units if u.tag in unit_role_dict[UnitRole.DROP_SHIP]
-        ]
-        mines_to_pickup: list[Unit] = [
-            u for u in units if u.tag in unit_role_dict[UnitRole.DROP_UNITS_TO_LOAD]
-        ]
-        dropped_off_mines: list[Unit] = [
-            u for u in units if u.tag in unit_role_dict[UnitRole.DROP_UNITS_ATTACKING]
-        ]
+        for medivac_tag, tracker_info in medivac_tag_to_mine_tracker.items():
+            medivac: Optional[Unit] = self.ai.unit_tag_dict.get(medivac_tag, None)
 
-        air_grid: np.ndarray = self.mediator.get_air_grid
-        ground_grid: np.ndarray = self.mediator.get_ground_grid
+            mines_to_pickup: list[Unit] = [
+                u
+                for u in units
+                if u.tag in tracker_info["mine_tags"]
+                and unit_role_dict[UnitRole.DROP_UNITS_TO_LOAD]
+            ]
+            dropped_off_mines: list[Unit] = [
+                u
+                for u in units
+                if u.tag in tracker_info["mine_tags"]
+                and u.tag in unit_role_dict[UnitRole.DROP_UNITS_ATTACKING]
+            ]
 
-        self._handle_medivacs_dropping_mines(medivacs, mines_to_pickup, air_grid)
-        self._handle_mines_to_pickup(mines_to_pickup, medivacs, ground_grid)
-        self._handle_dropped_mines(dropped_off_mines)
+            air_grid: np.ndarray = self.mediator.get_air_grid
+            ground_grid: np.ndarray = self.mediator.get_ground_grid
 
-    def _handle_medivacs_dropping_mines(
-        self, medivacs: list[Unit], mines_to_pickup: list[Unit], air_grid: np.ndarray
+            if medivac:
+                self._handle_medivac_dropping_mines(
+                    medivac, mines_to_pickup, air_grid, tracker_info["target"]
+                )
+            self._handle_mines_to_pickup(mines_to_pickup, medivac, ground_grid)
+            self._handle_dropped_mines(dropped_off_mines)
+
+    def _handle_medivac_dropping_mines(
+        self,
+        medivac: Unit,
+        mines_to_pickup: list[Unit],
+        air_grid: np.ndarray,
+        target: Point2,
     ) -> None:
         """Control medivacs involvement.
 
         Parameters
         ----------
-        medivacs :
-            The medivacs to control.
+        medivac :
+            The medivac to control.
         mines_to_pickup :
             The mines this medivac should carry.
         air_grid :
             Pathing grid this medivac can path on.
+        target :
+            Where should this medivac drop mines?
         """
-        for medivac in medivacs:
-            # can speed boost, do that and ignore other actions till next step
-            if (
-                medivac.is_moving
-                and AbilityId.EFFECT_MEDIVACIGNITEAFTERBURNERS in medivac.abilities
-            ):
-                medivac(AbilityId.EFFECT_MEDIVACIGNITEAFTERBURNERS)
-                continue
 
-            # initiate a new mine drop maneuver
-            mine_drop: CombatManeuver = CombatManeuver()
+        # can speed boost, do that and ignore other actions till next step
+        if (
+            medivac.is_moving
+            and AbilityId.EFFECT_MEDIVACIGNITEAFTERBURNERS in medivac.abilities
+        ):
+            medivac(AbilityId.EFFECT_MEDIVACIGNITEAFTERBURNERS)
+            return
 
-            # first priority is picking up units
+        # initiate a new mine drop maneuver
+        mine_drop: CombatManeuver = CombatManeuver()
+
+        # first priority is picking up units
+        mine_drop.add(
+            PickUpCargo(unit=medivac, grid=air_grid, pickup_targets=mines_to_pickup)
+        )
+        ready_to_drop: bool = self._can_drop_mines(medivac)
+        # if ready to drop, add path to target and drop behaviors to `mine_drop`
+        if ready_to_drop:
+            # path
             mine_drop.add(
-                PickUpCargo(unit=medivac, grid=air_grid, pickup_targets=mines_to_pickup)
+                PathUnitToTarget(
+                    unit=medivac,
+                    grid=air_grid,
+                    target=target,
+                    success_at_distance=1.5,
+                )
             )
-            ready_to_drop: bool = self._can_drop_mines(medivac)
-            # if ready to drop, add path to target and drop behaviors to `mine_drop`
-            if ready_to_drop:
-                # path
-                mine_drop.add(
-                    PathUnitToTarget(
-                        unit=medivac,
-                        grid=air_grid,
-                        target=self.target,
-                        success_at_distance=1.5,
-                    )
+            # drop off the mines
+            mine_drop.add(DropCargo(unit=medivac, target=medivac.position))
+        # not ready to drop anything, add staying safe and path to dead-space
+        # to `mine_drop` maneuver
+        else:
+            mine_drop.add(KeepUnitSafe(unit=medivac, grid=air_grid))
+            mine_drop.add(
+                PathUnitToTarget(
+                    unit=medivac,
+                    grid=air_grid,
+                    # TODO: Find dead space to hang around in for target here.
+                    #   This currently tries to move away from likely enemy position.
+                    target=target.towards(self.mediator.get_enemy_nat, -15.0),
+                    success_at_distance=3.0,
                 )
-                # drop off the mines
-                mine_drop.add(DropCargo(unit=medivac, target=medivac.position))
-            # not ready to drop anything, add staying safe and path to deadspace
-            # to `mine_drop` maneuver
-            else:
-                mine_drop.add(KeepUnitSafe(unit=medivac, grid=air_grid))
-                mine_drop.add(
-                    PathUnitToTarget(
-                        unit=medivac,
-                        grid=air_grid,
-                        # TODO: Find dead space to hang around in for target here.
-                        #   This currently tries to move away from likely enemy position.
-                        target=self.target.towards(self.mediator.get_enemy_nat, -15.0),
-                        success_at_distance=3.0,
-                    )
-                )
+            )
 
-            # register the behavior so it will be executed.
-            self.ai.register_behavior(mine_drop)
+        # register the behavior so it will be executed.
+        self.ai.register_behavior(mine_drop)
 
     def _handle_mines_to_pickup(
-        self, mines: list[Unit], medivacs: list[Unit], ground_grid: np.ndarray
+        self, mines: list[Unit], medivac: Optional[Unit], ground_grid: np.ndarray
     ) -> None:
         """Control mines waiting rescue.
 
@@ -148,14 +178,16 @@ class MedivacMineDrop(BaseUnit):
         ----------
         mines :
             Mines this method should control.
-        medivacs :
-            Medivacs that could possibly pick these mines up.
+        medivac :
+            Medivac that could possibly pick these mines up.
         ground_grid :
             Pathing grid these mines can path on.
         """
         for mine in mines:
-            if medivacs:
-                mine.move(cy_closest_to(mine.position, medivacs))
+            if mine.is_burrowed:
+                mine(AbilityId.BURROWUP_WIDOWMINE)
+            elif medivac:
+                mine.move(medivac.position)
             else:
                 self.ai.register_behavior(KeepUnitSafe(unit=mine, grid=ground_grid))
 
@@ -197,7 +229,7 @@ class MedivacMineDrop(BaseUnit):
                 )
 
     def _can_drop_mines(self, medivac: Unit) -> bool:
-        """ Can this medivac drop off mines?
+        """Can this medivac drop off mines?
 
         Use the AbilityTrackerManager in ares to detect widowmines
         attack ability becoming available.
