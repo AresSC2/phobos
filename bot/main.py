@@ -8,6 +8,7 @@ from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.unit import Unit
 
 from bot.consts import NON_COMBAT_UNIT_TYPES
+from bot.managers.combat_manager import CombatManager
 from bot.managers.drop_manager import DropManager
 from bot.managers.orbital_manager import OrbitalManager
 
@@ -41,9 +42,6 @@ class MyBot(AresBot):
 
     async def on_step(self, iteration: int) -> None:
         await super(MyBot, self).on_step(iteration)
-        # for testing units get unassigned correctly, remove later
-        for u in self.mediator.get_units_from_role(role=UnitRole.DEFENDING):
-            u.move(self.mediator.get_own_nat.towards(self.game_info.map_center, 12.0))
 
         self.register_behavior(Mining())
         if self.spawn_controller_active:
@@ -59,14 +57,19 @@ class MyBot(AresBot):
                 depot(AbilityId.MORPH_SUPPLYDEPOT_LOWER)
 
     async def register_managers(self) -> None:
+        """
+        Override the default `register_managers` in Ares, so we can
+        add our own managers.
+        """
         manager_mediator = ManagerMediator()
+        combat_manager = CombatManager(self, self.config, manager_mediator)
         drop_manager = DropManager(self, self.config, manager_mediator)
         orbital_manager = OrbitalManager(self, self.config, manager_mediator)
         self.manager_hub = Hub(
             self,
             self.config,
             manager_mediator,
-            additional_managers=[drop_manager, orbital_manager],
+            additional_managers=[combat_manager, drop_manager, orbital_manager],
         )
 
         await self.manager_hub.init_managers()
