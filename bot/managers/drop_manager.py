@@ -21,7 +21,11 @@ class DropManager(Manager):
         config: dict,
         mediator: ManagerMediator,
     ) -> None:
-        """Set up the manager.
+        """Handle all drop related logic.
+
+        This manager should assign units to drop, and call
+        relevant drop related combat classes to execute all
+        drops.
 
         Parameters
         ----------
@@ -31,10 +35,6 @@ class DropManager(Manager):
             Dictionary with the data from the configuration file
         mediator :
             ManagerMediator used for getting information from other managers.
-
-        Returns
-        -------
-
         """
         super().__init__(ai, config, mediator)
 
@@ -45,9 +45,6 @@ class DropManager(Manager):
         self._mine_drops: BaseUnit = MedivacMineDrops(ai, config, mediator)
 
     async def update(self, iteration: int) -> None:
-        """
-        Basic mule logic till this can be improved.
-        """
         self._assign_mine_drops()
         self._unassign_drops()
         self._execute_drops()
@@ -62,9 +59,12 @@ class DropManager(Manager):
             )
             unit_dict: dict[UnitID, Units] = self.manager_mediator.get_own_army_dict
 
-            if UnitID.MEDIVAC in unit_dict and UnitID.WIDOWMINE in unit_dict:
+            if UnitID.MEDIVAC in unit_dict and (
+                UnitID.WIDOWMINE in unit_dict or UnitID.WIDOWMINEBURROWED in unit_dict
+            ):
                 medivacs: Units = unit_dict[UnitID.MEDIVAC]
-                mines: Units = unit_dict[UnitID.WIDOWMINE]
+                mines: Units = self.ai.units({UnitID.WIDOWMINE, UnitID.WIDOWMINEBURROWED})
+
                 if len(medivacs) > 0 and len(mines) > 1:
                     medivac: Unit = unit_dict[UnitID.MEDIVAC][0]
                     self.manager_mediator.assign_role(

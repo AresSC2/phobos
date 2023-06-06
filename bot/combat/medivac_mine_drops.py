@@ -184,7 +184,9 @@ class MedivacMineDrops(BaseUnit):
             Pathing grid these mines can path on.
         """
         for mine in mines:
-            if medivac:
+            if mine.is_burrowed:
+                mine(AbilityId.BURROWUP_WIDOWMINE)
+            elif medivac:
                 mine.move(medivac.position)
             else:
                 self.ai.register_behavior(KeepUnitSafe(unit=mine, grid=ground_grid))
