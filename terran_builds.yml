@@ -16,31 +16,34 @@ BuildChoices:
     test_123:
         BotName: Test
         Cycle:
-            - 111
+            - OneOneOne
 
     Protoss:
         BotName: ProtossRace
         Cycle:
-            - 111
+            - OneOneOne
 
     Random:
         BotName: RandomRace
         Cycle:
-            - 111
+            - OneOneOne
 
     Terran:
         BotName: TerranRace
         Cycle:
-            - 111
+            - OneOneOne
 
     Zerg:
         BotName: ZergRace
         Cycle:
-            - 111
+            - OneOneOne
 
 Builds:
-    111:
+    OneOneOne:
         ConstantWorkerProduction: True
+        # TODO: Tidy this up so only the initial build is completed
+        #   Currently used as a hacky way to get structures down, and not dynamic at all
+        #   After https://github.com/AresSC2/phobos/issues/1 is completed
         OpeningBuildOrder:
             - 14 supply @ ramp
             - 15 gas
@@ -63,7 +66,35 @@ Builds:
             - 29 barracks
             - 29 starporttechlab
             - 29 supply
+            - 29 orbital
             - 29 raven
             - 29 siegetank
+            - 29 supply
+            - 29 barracks
+            - 29 supply
+            - 29 supply
+            - 42 factory
+            - 42 supply
+            - 42 supply
+            - 42 factorytechlab
+            - 42 expand
+            - 42 supply
+            - 52 barracks
+            - 52 supply
+            - 52 supply
+            - 60 barracks
+            - 60 supply
+            - 60 orbital
+            - 60 supply
+            - 60 supply
+            - 60 barracks
+            - 60 supply
+            - 60 barracks
+            - 60 supply
+            - 60 supply
+            - 60 supply
+            - 60 supply
+            - 60 supply
+            - 60 supply
 
 
