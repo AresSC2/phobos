@@ -40,7 +40,9 @@ class PlacePredictiveAoE(CombatBehavior):
     aoe_ability: AbilityId
     ability_delay: int
 
-    def execute(self, ai: AresBot, config: dict, mediator: ManagerMediator) -> bool:
+    def execute(
+        self, ai: "AresBot", config: dict, mediator: ManagerMediator, **kwargs
+    ) -> bool:
         """Take the enemy center unit and fire a predictive AoE.
 
         Parameters
@@ -51,19 +53,22 @@ class PlacePredictiveAoE(CombatBehavior):
             Dictionary with the data from the configuration file
         mediator :
             ManagerMediator used for getting information from other managers.
+        **kwargs :
+            None
 
         Returns
         -------
         bool :
             CombatBehavior carried out an action.
         """
-        # try to fire the ability if we find a position
-        if pos := self._calculate_target_position(ai):
-            return self.unit(self.aoe_ability, pos)
-        # no position found
+        if self.aoe_ability in self.unit.abilities:
+            # try to fire the ability if we find a position
+            if pos := self._calculate_target_position(ai):
+                return self.unit(self.aoe_ability, pos)
+        # no position found or the ability isn't ready
         return False
 
-    def _calculate_target_position(self, ai: AresBot) -> Point2:
+    def _calculate_target_position(self, ai: "AresBot") -> Point2:
         """Calculate where we want to put the AoE.
 
         Returns
@@ -76,7 +81,7 @@ class PlacePredictiveAoE(CombatBehavior):
         own_unit_path = self._get_unit_real_path(self.path, self.unit.distance_per_step)
 
         # enemy path, assuming it moves directly towards our unit at all times
-        chasing_path = self._get_chasing_unit_path(
+        chasing_path, _reached_target = self._get_chasing_unit_path(
             own_unit_path,
             self.enemy_center_unit.position,
             self.enemy_center_unit.distance_per_step,
