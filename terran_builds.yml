@@ -40,12 +40,14 @@ BuildChoices:
 
 Builds:
     OneOneOne:
-        ConstantWorkerProduction: True
+        ConstantWorkerProductionTill: 42
         # TODO: Tidy this up so only the initial build is completed
         #   Currently used as a hacky way to get structures down, and not dynamic at all
         #   After https://github.com/AresSC2/phobos/issues/1 is completed
         OpeningBuildOrder:
             - 14 supply @ ramp
+            - 15 expand
+            - 18 expand
             - 15 gas
             - 16 barracks @ ramp
             - 19 orbital
@@ -58,43 +60,42 @@ Builds:
             - 23 barracksreactor
             - 24 starport
             - 25 widowmine
+            - 25 orbital
+            - 26 supply
             - 27 widowmine
             - 29 medivac
             - 29 factorytechlab
             - 29 gas
+            - 29 supply
             - 29 barracks
             - 29 barracks
             - 29 starporttechlab
             - 29 supply
-            - 29 orbital
             - 29 raven
             - 29 siegetank
             - 29 supply
-            - 29 barracks
             - 29 supply
-            - 29 supply
-            - 42 factory
             - 42 supply
             - 42 supply
-            - 42 factorytechlab
-            - 42 expand
+            - 42 barrackstechlab
             - 42 supply
             - 52 barracks
             - 52 supply
             - 52 supply
             - 60 barracks
             - 60 supply
-            - 60 orbital
-            - 60 supply
-            - 60 supply
-            - 60 barracks
-            - 60 supply
-            - 60 barracks
-            - 60 supply
-            - 60 supply
-            - 60 supply
-            - 60 supply
-            - 60 supply
-            - 60 supply
-
+            - 64 supply
+            - 66 barracks
+            - 70 supply
+            - 78 supply
+            - 85 supply
+            - 90 supply
+            - 96 supply
+            - 96 barracks
+            - 102 supply
+            - 110 supply
+            - 120 supply
+            - 130 supply
+            - 138 supply
+            - 138 barracks
 
