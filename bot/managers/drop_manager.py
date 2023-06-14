@@ -63,7 +63,9 @@ class DropManager(Manager):
                 UnitID.WIDOWMINE in unit_dict or UnitID.WIDOWMINEBURROWED in unit_dict
             ):
                 medivacs: Units = unit_dict[UnitID.MEDIVAC]
-                mines: Units = self.ai.units({UnitID.WIDOWMINE, UnitID.WIDOWMINEBURROWED})
+                mines: Units = self.ai.units(
+                    {UnitID.WIDOWMINE, UnitID.WIDOWMINEBURROWED}
+                )
 
                 if len(medivacs) > 0 and len(mines) > 1:
                     medivac: Unit = unit_dict[UnitID.MEDIVAC][0]
@@ -78,6 +80,7 @@ class DropManager(Manager):
                         "mine_tags": {mine.tag for mine in mines},
                         "target": mine_drop_target,
                     }
+                    self._assigned_111_mine_drop = True
 
     def _unassign_drops(self) -> None:
         # unassign units from mine drop if medivac or assigned mines have died
@@ -93,11 +96,8 @@ class DropManager(Manager):
                         self.manager_mediator.assign_role(
                             tag=medivac.tag, role=UnitRole.DEFENDING
                         )
-            # no medivac, reassign mines
-            else:
-                self.manager_mediator.batch_assign_role(
-                    tags=mine_tracker["mine_tags"], role=UnitRole.DEFENDING
-                )
+            # else no medivac:
+            # leave mines in enemy base as they tend to die trying to escape
 
     def _execute_drops(self):
         self._mine_drops.execute(
