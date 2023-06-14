@@ -1,14 +1,13 @@
 from typing import TYPE_CHECKING
 
-from sc2.ids.ability_id import AbilityId
-from sc2.ids.unit_typeid import UnitTypeId as UnitID
-from sc2.units import Units
-
 from ares import ManagerMediator
 from ares.consts import UnitRole, UnitTreeQueryType
 from ares.cython_extensions.geometry import cy_distance_to
 from ares.managers.manager import Manager
+from sc2.ids.ability_id import AbilityId
+from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.position import Point2
+from sc2.units import Units
 
 if TYPE_CHECKING:
     from ares import AresBot

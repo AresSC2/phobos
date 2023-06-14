@@ -29,10 +29,10 @@ class MyBot(AresBot):
         super().__init__(game_step_override)
 
         self.army_comp: dict[UnitID, Any] = {
-            UnitID.MARINE: {"proportion": 0.74, "priority": 3},
-            UnitID.MEDIVAC: {"proportion": 0.1, "priority": 2},
-            UnitID.RAVEN: {"proportion": 0.01, "priority": 0},
-            UnitID.SIEGETANK: {"proportion": 0.15, "priority": 1},
+            UnitID.MARINE: {"proportion": 0.8, "priority": 3},
+            UnitID.MEDIVAC: {"proportion": 0.099, "priority": 2},
+            UnitID.RAVEN: {"proportion": 0.001, "priority": 0},
+            UnitID.SIEGETANK: {"proportion": 0.1, "priority": 1},
         }
         self.spawn_controller_active: bool = False
 
