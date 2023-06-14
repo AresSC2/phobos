@@ -10,8 +10,8 @@ from ares.behaviors.combat.individual import (
     PathUnitToTarget,
     PickUpCargo,
 )
-from ares.consts import UnitRole
-from ares.cython_extensions.units_utils import cy_closest_to
+from ares.consts import WORKER_TYPES, UnitRole, UnitTreeQueryType
+from ares.cython_extensions.units_utils import cy_center
 from sc2.ids.ability_id import AbilityId
 from sc2.position import Point2
 from sc2.unit import Unit
@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 # when mines have 4 seconds of weapon cooldown left, medivac can drop off
 FOUR_SECONDS: int = int(22.5 * 4)
+# time to give up
+MIN_HEALTH_MEDIVAC_PERC: float = 0.2
 
 
 @dataclass
@@ -68,6 +70,8 @@ class MedivacMineDrops(BaseUnit):
         if not units:
             return
 
+        air_grid: np.ndarray = self.mediator.get_air_grid
+        ground_grid: np.ndarray = self.mediator.get_ground_grid
         medivac_tag_to_mine_tracker: dict[int, dict] = kwargs[
             "medivac_tag_to_mine_tracker"
         ]
@@ -82,7 +86,7 @@ class MedivacMineDrops(BaseUnit):
                 u
                 for u in units
                 if u.tag in tracker_info["mine_tags"]
-                and unit_role_dict[UnitRole.DROP_UNITS_TO_LOAD]
+                and u.tag in unit_role_dict[UnitRole.DROP_UNITS_TO_LOAD]
             ]
             dropped_off_mines: list[Unit] = [
                 u
@@ -90,9 +94,6 @@ class MedivacMineDrops(BaseUnit):
                 if u.tag in tracker_info["mine_tags"]
                 and u.tag in unit_role_dict[UnitRole.DROP_UNITS_ATTACKING]
             ]
-
-            air_grid: np.ndarray = self.mediator.get_air_grid
-            ground_grid: np.ndarray = self.mediator.get_ground_grid
 
             if medivac:
                 self._handle_medivac_dropping_mines(
@@ -129,6 +130,9 @@ class MedivacMineDrops(BaseUnit):
         ):
             medivac(AbilityId.EFFECT_MEDIVACIGNITEAFTERBURNERS)
             return
+        healthy: bool = medivac.health_percentage >= MIN_HEALTH_MEDIVAC_PERC
+        # recalculate precise target based on live game state
+        target = self._calculate_precise_target(air_grid, medivac, target)
 
         # initiate a new mine drop maneuver
         mine_drop: CombatManeuver = CombatManeuver()
@@ -140,20 +144,24 @@ class MedivacMineDrops(BaseUnit):
         ready_to_drop: bool = self._can_drop_mines(medivac)
         # if ready to drop, add path to target and drop behaviors to `mine_drop`
         if ready_to_drop:
-            # path
-            mine_drop.add(
-                PathUnitToTarget(
-                    unit=medivac,
-                    grid=air_grid,
-                    target=target,
-                    success_at_distance=1.5,
+            # path to target if healthy
+            if healthy:
+                mine_drop.add(
+                    PathUnitToTarget(
+                        unit=medivac,
+                        grid=air_grid,
+                        target=target,
+                        success_at_distance=1.5,
+                    )
                 )
-            )
             # drop off the mines
             mine_drop.add(DropCargo(unit=medivac, target=medivac.position))
         # not ready to drop anything, add staying safe and path to dead-space
         # to `mine_drop` maneuver
         else:
+            if not healthy and medivac.cargo_used == 0:
+                self.mediator.assign_role(tag=medivac.tag, role=UnitRole.DEFENDING)
+
             mine_drop.add(KeepUnitSafe(unit=medivac, grid=air_grid))
             mine_drop.add(
                 PathUnitToTarget(
@@ -161,7 +169,7 @@ class MedivacMineDrops(BaseUnit):
                     grid=air_grid,
                     # TODO: Find dead space to hang around in for target here.
                     #   This currently tries to move away from likely enemy position.
-                    target=target.towards(self.mediator.get_enemy_nat, -15.0),
+                    target=target.towards(self.mediator.get_enemy_nat, -20.0),
                     success_at_distance=3.0,
                 )
             )
@@ -173,6 +181,8 @@ class MedivacMineDrops(BaseUnit):
         self, mines: list[Unit], medivac: Optional[Unit], ground_grid: np.ndarray
     ) -> None:
         """Control mines waiting rescue.
+
+        TODO: If drilling claws upgrade available, don't rescue mines?
 
         Parameters
         ----------
@@ -199,7 +209,8 @@ class MedivacMineDrops(BaseUnit):
         mines :
             Mines this method should control.
         """
-
+        if len(mines) == 0:
+            return
         # Use the ability tracker manager in Ares to check if weapon is ready.
         ability: AbilityId = AbilityId.WIDOWMINEATTACK_WIDOWMINEATTACK
         current_frame: int = self.ai.state.game_loop
@@ -215,7 +226,7 @@ class MedivacMineDrops(BaseUnit):
                 attack_available = False
             if attack_available and not mine.is_burrowed:
                 mine(AbilityId.BURROWDOWN_WIDOWMINE)
-            elif not attack_available and mine.is_burrowed:
+            elif ability not in mine.abilities and mine.is_burrowed:
                 mine(AbilityId.BURROWUP_WIDOWMINE)
                 # attack is not available, therefore:
                 # - assign mine with role, so it can be rescued.
@@ -248,6 +259,10 @@ class MedivacMineDrops(BaseUnit):
         if not medivac.has_cargo:
             return False
 
+        # medivac is low on health, always ready to drop
+        if medivac.health_percentage < MIN_HEALTH_MEDIVAC_PERC:
+            return True
+
         cargo_tags: set[int] = medivac.passengers_tags
         current_frame: int = self.ai.state.game_loop
         unit_to_ability_dict: dict[
@@ -264,3 +279,40 @@ class MedivacMineDrops(BaseUnit):
                     return False
 
         return True
+
+    def _calculate_precise_target(
+        self, air_grid: np.ndarray, medivac: Unit, target: Point2
+    ) -> Point2:
+        """Given the precalculated target, update it depending on current game state.
+
+        Parameters
+        ----------
+        air_grid :
+            The grid the medivac is using for pathing and influence.
+        medivac :
+            The actual medivac to calculate drop target for.
+        target :
+            General precalculated target.
+
+        Returns
+        -------
+
+        """
+        med_pos: Point2 = medivac.position
+        # look for a cluster of enemy workers nearby
+        close_enemy_workers: list[Unit] = self.mediator.get_units_in_range(
+            start_points=[med_pos],
+            distances=[8.5],
+            query_tree=UnitTreeQueryType.EnemyGround,
+        )[0].filter(lambda u: u.type_id in WORKER_TYPES)
+
+        if len(close_enemy_workers) >= 6:
+            target = Point2(cy_center(close_enemy_workers))
+
+        # current position is not safe for medivac, find a nearby safe spot
+        if not self.mediator.is_position_safe(grid=air_grid, position=med_pos):
+            target = self.mediator.find_closest_safe_spot(
+                from_pos=target, grid=air_grid
+            )
+
+        return target
