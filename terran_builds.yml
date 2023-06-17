@@ -46,8 +46,6 @@ Builds:
         #   After https://github.com/AresSC2/phobos/issues/1 is completed
         OpeningBuildOrder:
             - 14 supply @ ramp
-            - 15 expand
-            - 18 expand
             - 15 gas
             - 16 barracks @ ramp
             - 19 orbital

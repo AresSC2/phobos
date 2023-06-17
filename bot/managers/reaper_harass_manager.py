@@ -1,13 +1,11 @@
 """Handle Reaper Harass."""
-from typing import TYPE_CHECKING, Set, Dict
+from typing import TYPE_CHECKING, Dict, Set
 
 from ares import ManagerMediator
-from ares.consts import DROP_ROLES, UnitRole
+from ares.consts import UnitRole
 from ares.managers.manager import Manager
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.position import Point2
-from sc2.unit import Unit
-from sc2.units import Units
 
 from bot.combat.base_unit import BaseUnit
 from bot.combat.reaper_harass import ReaperHarass
@@ -45,7 +43,7 @@ class ReaperHarassManager(Manager):
         self._reaper_harass: BaseUnit = ReaperHarass(ai, config, mediator)
         self.healing_reaper_tags: Set[int] = set()
         self.reaper_attack_threshold: float = 0.9
-        self.reaper_retreat_threshold: float = 0.4
+        self.reaper_retreat_threshold: float = 0.45
 
         # TODO: make the target more sophisticated
         self.reaper_harass_target: Point2 = ai.enemy_start_locations[0]
@@ -76,10 +74,8 @@ class ReaperHarassManager(Manager):
                     self.healing_reaper_tags.add(reaper.tag)
 
                 # assign the reaper a target if its tag isn't in the healing tracking
-                if reaper.tag not in self.healing_reaper_tags:
-                    self._reaper_to_target_tracker[
-                        reaper.tag
-                    ] = self.reaper_harass_target
+                # if reaper.tag not in self.healing_reaper_tags:
+                self._reaper_to_target_tracker[reaper.tag] = self.reaper_harass_target
 
     def _unassign_harass(self) -> None:
         # TODO: do something
