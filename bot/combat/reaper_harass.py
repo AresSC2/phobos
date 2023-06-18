@@ -124,14 +124,7 @@ class ReaperHarass(BaseUnit):
             # no threats near reaper, get to target
             if not threats_near_reaper:
                 reaper_maneuver.add(
-                    PathUnitToTarget(
-                        unit=unit,
-                        grid=reaper_grid,
-                        target=target,
-                        success_at_distance=4.0,
-                        # already know there are no threats
-                        sense_danger=False,
-                    )
+                    PathUnitToTarget(unit=unit, grid=reaper_grid, target=target)
                 )
 
             # else threats are around
@@ -161,7 +154,9 @@ class ReaperHarass(BaseUnit):
         if not close_unit.is_memory:
             # close unit is not chasing reaper, throw aggressive grenade
             # TODO: Look for clumps etc a clump of workers
-            if not close_unit.is_facing(unit):
+            if not close_unit.is_facing(unit, angle_error=0.1) and self.ai.is_visible(
+                close_unit
+            ):
                 grenade_maneuver.add(
                     UseAbility(
                         ability=AbilityId.KD8CHARGE_KD8CHARGE,
@@ -206,9 +201,7 @@ class ReaperHarass(BaseUnit):
         )
 
         enemy_target: Optional[Unit] = None
-        if enemy_workers and self.mediator.is_position_safe(
-            grid=reaper_grid, position=unit.position
-        ):
+        if enemy_workers:
             enemy_target = cy_pick_enemy_target(enemy_workers)
         # only light units around, pick a target
         elif len(light) == len(threats_near_reaper):
