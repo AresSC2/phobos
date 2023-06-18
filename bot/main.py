@@ -84,9 +84,9 @@ class MyBot(AresBot):
     async def on_unit_created(self, unit: Unit) -> None:
         await super(MyBot, self).on_unit_created(unit)
 
-        # assign all units to DEFENDING role by default
+        # assign all units to ATTACKING role by default
         if unit.type_id not in NON_COMBAT_UNIT_TYPES:
-            self.mediator.assign_role(tag=unit.tag, role=UnitRole.DEFENDING)
+            self.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
 
     async def on_building_construction_complete(self, unit: Unit) -> None:
         await super(MyBot, self).on_building_construction_complete(unit)
