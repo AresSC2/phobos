@@ -1,8 +1,10 @@
 from typing import TYPE_CHECKING
 
 from ares import ManagerMediator
+from ares.behaviors.combat.individual import DropCargo, StutterUnitBack
 from ares.consts import UnitRole, UnitTreeQueryType
 from ares.cython_extensions.geometry import cy_distance_to
+from ares.cython_extensions.units_utils import cy_closest_to
 from ares.managers.manager import Manager
 from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
@@ -26,8 +28,6 @@ class CombatManager(Manager):
         or defensive units. Combat classes should be called
         as needed to execute unit control.
 
-        See DropManager for drop assignment and execution.
-
         Parameters
         ----------
         ai :
@@ -40,35 +40,40 @@ class CombatManager(Manager):
         super().__init__(ai, config, mediator)
 
     @property
+    def attack_target(self) -> Point2:
+        if self.ai.enemy_structures:
+            return self.ai.enemy_structures.closest_to(self.ai.start_location).position
+        else:
+            return self.ai.enemy_start_locations[0]
+
+    @property
     def rally_point(self) -> Point2:
         return self.manager_mediator.get_own_nat.towards(
             self.ai.game_info.map_center, 8.0
         )
 
     async def update(self, iteration: int) -> None:
-        # only basic goto rally point logic for now
-        # this should all go in combat classes eventually
-        defenders: Units = self.manager_mediator.get_units_from_role(
-            role=UnitRole.DEFENDING
+        attackers: Units = self.manager_mediator.get_units_from_role(
+            role=UnitRole.ATTACKING
         )
-        close_to_rally: Units = self.manager_mediator.get_units_in_range(
-            start_points=[self.rally_point],
-            distances=9.5,
-            query_tree=UnitTreeQueryType.AllOwn,
-        )[0]
-        close_to_rally_tags: set[int] = {u.tag for u in close_to_rally}
-        _rally_point: Point2 = self.rally_point
 
-        for u in defenders:
-            if u.tag not in close_to_rally_tags:
-                u.move(_rally_point)
-            elif (
+        # everything we have no logic for yet gets a-moved
+        # this should all go in combat classes eventually
+        target: Point2 = self.attack_target
+
+        for u in attackers:
+            # mines burrow and wait for mine drop for now
+            if (
                 u.type_id == UnitID.WIDOWMINE
-                and cy_distance_to(u.position, _rally_point) < 6.0
+                and cy_distance_to(u.position, self.rally_point) < 6.0
             ):
                 u(AbilityId.BURROWDOWN_WIDOWMINE)
-            elif (
-                u.type_id == UnitID.SIEGETANK
-                and cy_distance_to(u.position, _rally_point) < 6.0
-            ):
-                u(AbilityId.SIEGEMODE_SIEGEMODE)
+            else:
+                if u.is_flying:
+                    # unload any medivacs
+                    if u.has_cargo and self.ai.in_pathing_grid(u.position):
+                        self.ai.register_behavior(DropCargo(unit=u, target=u.position))
+                    else:
+                        u.attack(cy_closest_to(target, attackers).position)
+                else:
+                    u.attack(target)

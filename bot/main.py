@@ -11,6 +11,7 @@ from bot.consts import NON_COMBAT_UNIT_TYPES
 from bot.managers.combat_manager import CombatManager
 from bot.managers.drop_manager import DropManager
 from bot.managers.orbital_manager import OrbitalManager
+from bot.managers.reaper_harass_manager import ReaperHarassManager
 
 
 class MyBot(AresBot):
@@ -64,12 +65,18 @@ class MyBot(AresBot):
         manager_mediator = ManagerMediator()
         combat_manager = CombatManager(self, self.config, manager_mediator)
         drop_manager = DropManager(self, self.config, manager_mediator)
+        reaper_harass_manager = ReaperHarassManager(self, self.config, manager_mediator)
         orbital_manager = OrbitalManager(self, self.config, manager_mediator)
         self.manager_hub = Hub(
             self,
             self.config,
             manager_mediator,
-            additional_managers=[combat_manager, drop_manager, orbital_manager],
+            additional_managers=[
+                combat_manager,
+                drop_manager,
+                orbital_manager,
+                reaper_harass_manager,
+            ],
         )
 
         await self.manager_hub.init_managers()
@@ -77,9 +84,9 @@ class MyBot(AresBot):
     async def on_unit_created(self, unit: Unit) -> None:
         await super(MyBot, self).on_unit_created(unit)
 
-        # assign all units to DEFENDING role by default
+        # assign all units to ATTACKING role by default
         if unit.type_id not in NON_COMBAT_UNIT_TYPES:
-            self.mediator.assign_role(tag=unit.tag, role=UnitRole.DEFENDING)
+            self.mediator.assign_role(tag=unit.tag, role=UnitRole.ATTACKING)
 
     async def on_building_construction_complete(self, unit: Unit) -> None:
         await super(MyBot, self).on_building_construction_complete(unit)

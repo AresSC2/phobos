@@ -22,10 +22,8 @@ from bot.combat.base_unit import BaseUnit
 if TYPE_CHECKING:
     from ares import AresBot
 
-# when mines have 4 seconds of weapon cooldown left, medivac can drop off
-FOUR_SECONDS: int = int(22.5 * 4)
-# time to give up
-MIN_HEALTH_MEDIVAC_PERC: float = 0.2
+# when mines have 3 seconds of weapon cooldown left, medivac can drop off
+THREE_SECONDS: int = int(22.4 * 3)
 
 
 @dataclass
@@ -95,12 +93,12 @@ class MedivacMineDrops(BaseUnit):
                 and u.tag in unit_role_dict[UnitRole.DROP_UNITS_ATTACKING]
             ]
 
-            if medivac:
+            if medivac and medivac_tag in unit_role_dict[UnitRole.DROP_SHIP]:
                 self._handle_medivac_dropping_mines(
                     medivac, mines_to_pickup, air_grid, tracker_info["target"]
                 )
             self._handle_mines_to_pickup(mines_to_pickup, medivac, ground_grid)
-            self._handle_dropped_mines(dropped_off_mines)
+            self._handle_dropped_mines(ground_grid, dropped_off_mines, medivac)
 
     def _handle_medivac_dropping_mines(
         self,
@@ -130,7 +128,7 @@ class MedivacMineDrops(BaseUnit):
         ):
             medivac(AbilityId.EFFECT_MEDIVACIGNITEAFTERBURNERS)
             return
-        healthy: bool = medivac.health_percentage >= MIN_HEALTH_MEDIVAC_PERC
+
         # recalculate precise target based on live game state
         target = self._calculate_precise_target(air_grid, medivac, target)
 
@@ -144,34 +142,28 @@ class MedivacMineDrops(BaseUnit):
         ready_to_drop: bool = self._can_drop_mines(medivac)
         # if ready to drop, add path to target and drop behaviors to `mine_drop`
         if ready_to_drop:
-            # path to target if healthy
-            if healthy:
-                mine_drop.add(
-                    PathUnitToTarget(
-                        unit=medivac,
-                        grid=air_grid,
-                        target=target,
-                        success_at_distance=1.5,
-                    )
-                )
-            # drop off the mines
-            mine_drop.add(DropCargo(unit=medivac, target=medivac.position))
-        # not ready to drop anything, add staying safe and path to dead-space
-        # to `mine_drop` maneuver
-        else:
-            if not healthy and medivac.cargo_used == 0:
-                self.mediator.assign_role(tag=medivac.tag, role=UnitRole.DEFENDING)
-
-            mine_drop.add(KeepUnitSafe(unit=medivac, grid=air_grid))
+            # path to target
             mine_drop.add(
                 PathUnitToTarget(
                     unit=medivac,
                     grid=air_grid,
-                    # TODO: Find dead space to hang around in for target here.
-                    #   This currently tries to move away from likely enemy position.
-                    target=target.towards(self.mediator.get_enemy_nat, -20.0),
-                    success_at_distance=3.0,
+                    target=target,
+                    success_at_distance=4.0,
                 )
+            )
+            # drop off the mines
+            mine_drop.add(DropCargo(unit=medivac, target=medivac.position))
+        # not ready to drop anything, add staying safe and path to dead-space
+        else:
+            mine_drop.add(KeepUnitSafe(unit=medivac, grid=air_grid))
+            # TODO: Find dead space to hang around in for target here.
+            #   This currently tries to move away from likely enemy position.
+            safe_spot: Point2 = self.mediator.find_closest_safe_spot(
+                from_pos=target.towards(self.mediator.get_enemy_nat, -20.0),
+                grid=air_grid,
+            )
+            mine_drop.add(
+                PathUnitToTarget(unit=medivac, grid=air_grid, target=safe_spot)
             )
 
         # register the behavior so it will be executed.
@@ -199,9 +191,13 @@ class MedivacMineDrops(BaseUnit):
             elif medivac:
                 mine.move(medivac.position)
             else:
-                self.ai.register_behavior(KeepUnitSafe(unit=mine, grid=ground_grid))
+                self.mediator.assign_role(
+                    tag=mine.tag, role=UnitRole.DROP_UNITS_ATTACKING
+                )
 
-    def _handle_dropped_mines(self, mines: list[Unit]) -> None:
+    def _handle_dropped_mines(
+        self, grid: np.ndarray, mines: list[Unit], medivac: Unit
+    ) -> None:
         """Control mines that've recently been dropped off.
 
         Parameters
@@ -224,9 +220,10 @@ class MedivacMineDrops(BaseUnit):
             )
             if mine.is_burrowed and ability not in mine.abilities:
                 attack_available = False
-            if attack_available and not mine.is_burrowed:
+            if (attack_available or not medivac) and not mine.is_burrowed:
                 mine(AbilityId.BURROWDOWN_WIDOWMINE)
-            elif ability not in mine.abilities and mine.is_burrowed:
+            # if no medivac, just leave the mines alone
+            elif ability not in mine.abilities and mine.is_burrowed and medivac:
                 mine(AbilityId.BURROWUP_WIDOWMINE)
                 # attack is not available, therefore:
                 # - assign mine with role, so it can be rescued.
@@ -238,6 +235,8 @@ class MedivacMineDrops(BaseUnit):
                     ability=ability,
                     unit_tag=mine.tag,
                 )
+            else:
+                self.ai.register_behavior(KeepUnitSafe(mine, grid))
 
     def _can_drop_mines(self, medivac: Unit) -> bool:
         """Can this medivac drop off mines?
@@ -259,10 +258,6 @@ class MedivacMineDrops(BaseUnit):
         if not medivac.has_cargo:
             return False
 
-        # medivac is low on health, always ready to drop
-        if medivac.health_percentage < MIN_HEALTH_MEDIVAC_PERC:
-            return True
-
         cargo_tags: set[int] = medivac.passengers_tags
         current_frame: int = self.ai.state.game_loop
         unit_to_ability_dict: dict[
@@ -273,7 +268,7 @@ class MedivacMineDrops(BaseUnit):
             if tag in unit_to_ability_dict:
                 attack_available: bool = current_frame >= (
                     unit_to_ability_dict[tag][AbilityId.WIDOWMINEATTACK_WIDOWMINEATTACK]
-                    - FOUR_SECONDS
+                    - THREE_SECONDS
                 )
                 if not attack_available:
                     return False
