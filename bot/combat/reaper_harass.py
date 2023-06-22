@@ -274,7 +274,7 @@ class ReaperHarass(BaseUnit):
             PathUnitToTarget(
                 unit=unit,
                 grid=reaper_grid,
-                target=self.mediator.get_rally_point,
+                target=self.ai.start_location,
             )
         )
 
