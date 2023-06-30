@@ -12,6 +12,7 @@ from bot.managers.combat_manager import CombatManager
 from bot.managers.drop_manager import DropManager
 from bot.managers.orbital_manager import OrbitalManager
 from bot.managers.reaper_harass_manager import ReaperHarassManager
+from bot.managers.scout_manager import ScoutManager
 
 
 class MyBot(AresBot):
@@ -49,7 +50,6 @@ class MyBot(AresBot):
             self.register_behavior(
                 SpawnController(
                     army_composition_dict=self.army_comp,
-                    ignore_proportions_below_unit_count=2,
                 )
             )
 
@@ -63,19 +63,17 @@ class MyBot(AresBot):
         add our own managers.
         """
         manager_mediator = ManagerMediator()
-        combat_manager = CombatManager(self, self.config, manager_mediator)
-        drop_manager = DropManager(self, self.config, manager_mediator)
-        reaper_harass_manager = ReaperHarassManager(self, self.config, manager_mediator)
-        orbital_manager = OrbitalManager(self, self.config, manager_mediator)
+
         self.manager_hub = Hub(
             self,
             self.config,
             manager_mediator,
             additional_managers=[
-                combat_manager,
-                drop_manager,
-                orbital_manager,
-                reaper_harass_manager,
+                CombatManager(self, self.config, manager_mediator),
+                DropManager(self, self.config, manager_mediator),
+                OrbitalManager(self, self.config, manager_mediator),
+                ReaperHarassManager(self, self.config, manager_mediator),
+                ScoutManager(self, self.config, manager_mediator),
             ],
         )
 

@@ -30,6 +30,8 @@ THREE_SECONDS: int = int(22.4 * 3)
 class MedivacMineDrops(BaseUnit):
     """Execute behavior for mines and medivac in a mine drop.
 
+    Called from `DropManager`
+
     Parameters
     ----------
     ai : AresBot
