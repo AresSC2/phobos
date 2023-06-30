@@ -175,6 +175,9 @@ class PlacePredictiveAoE(CombatBehavior):
         curr_target_idx: int = 1
         # 100 should be overkill, but I'm really just trying to avoid a `while` loop
         for step in range(100):
+            if curr_target_idx >= len(unit_path):
+                # we've made it to the end of the path
+                break
             # travel directly towards the next point on the path, updating the target
             # point when the one before it is reached
             next_position, increase_target_idx = self._get_unit_next_position(
@@ -190,9 +193,6 @@ class PlacePredictiveAoE(CombatBehavior):
             if increase_target_idx:
                 # we made it to the current target point, get the next one
                 curr_target_idx += 1
-            if curr_target_idx == len(unit_path):
-                # we've made it to the end of the path
-                break
 
         return real_path
 

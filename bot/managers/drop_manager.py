@@ -4,6 +4,7 @@ from sc2.position import Point2
 
 from ares import ManagerMediator
 from ares.consts import DROP_ROLES, UnitRole
+from ares.cython_extensions.geometry import cy_towards
 from ares.managers.manager import Manager
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.unit import Unit
@@ -58,9 +59,12 @@ class DropManager(Manager):
         if (
             self.ai.build_order_runner.chosen_opening == "OneOneOne"
             and not self._assigned_111_mine_drop
+            and not self.manager_mediator.get_main_ground_threats_near_townhall
         ):
-            mine_drop_target: Point2 = self.ai.enemy_start_locations[0].towards(
-                self.ai.game_info.map_center, -4.0
+            mine_drop_target: Point2 = Point2(
+                cy_towards(
+                    self.ai.enemy_start_locations[0], self.ai.game_info.map_center, -4.0
+                )
             )
             unit_dict: dict[UnitID, Units] = self.manager_mediator.get_own_army_dict
 

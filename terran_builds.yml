@@ -65,17 +65,11 @@ Builds:
             - 29 factorytechlab
             - 29 gas
             - 29 supply
-            - 29 barracks
+            - 29 siegetank
             - 29 barracks
             - 29 starporttechlab
-            - 29 supply
-            - 29 raven
-            - 29 siegetank
-            - 29 supply
-            - 29 supply
-            - 42 supply
-            - 42 supply
-            - 42 barrackstechlab
+            - 30 supply
+            - 31 supply
             - 42 supply
             - 52 barracks
             - 52 supply
@@ -86,7 +80,11 @@ Builds:
             - 66 barracks
             - 70 supply
             - 78 supply
+            - 78 barracks
+            - 80 barracks
+            - 80 barracks
             - 85 supply
+            - 85 barracks
             - 90 supply
             - 96 supply
             - 96 barracks
@@ -95,5 +93,8 @@ Builds:
             - 120 supply
             - 130 supply
             - 138 supply
-            - 138 barracks
+            - 138 supply
+            - 144 supply
+            - 144 supply
+            - 160 supply
 

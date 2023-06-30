@@ -8,10 +8,11 @@ from ares.behaviors.combat.individual import (
     KeepUnitSafe,
     PathUnitToTarget,
     StutterUnitBack,
+    StutterUnitForward,
     UseAbility,
 )
-from ares.consts import ALL_STRUCTURES, WORKER_TYPES, UnitTreeQueryType
-from ares.cython_extensions.combat_utils import cy_pick_enemy_target
+from ares.consts import ALL_STRUCTURES, UnitTreeQueryType
+from ares.cython_extensions.combat_utils import cy_pick_enemy_target, cy_is_facing
 from ares.cython_extensions.geometry import cy_distance_to
 from ares.cython_extensions.units_utils import cy_closest_to, cy_in_attack_range
 from ares.managers.manager_mediator import ManagerMediator
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
 class ReaperHarass(BaseUnit):
     """Execute behavior for Reaper harass.
 
+    Called from `ReaperHarassManager`
+
     Parameters
     ----------
     ai : AresBot
@@ -44,6 +47,7 @@ class ReaperHarass(BaseUnit):
     ai: "AresBot"
     config: dict
     mediator: ManagerMediator
+    reaper_grenade_range: float = 5.0
 
     def execute(self, units: Units, **kwargs) -> None:
         """Execute the Reaper harass.
@@ -86,13 +90,15 @@ class ReaperHarass(BaseUnit):
         reaper_grid = self.mediator.get_climber_grid
 
         for unit in units:
-            target: Point2 = reaper_to_target_tracker[unit.tag]
+            tag: int = unit.tag
+            target: Point2 = reaper_to_target_tracker[tag]
             unit_pos: Point2 = unit.position
-            distance_to_target: float = cy_distance_to(unit_pos, target)
-            close_to_target: bool = distance_to_target < 15.0
+
             # get units near the reaper that can damage it
-            threats_near_reaper: Units = everything_near_reapers[unit.tag].filter(
-                lambda u: u.can_attack_ground and u.type_id not in ALL_STRUCTURES
+            threats_near_reaper: Units = everything_near_reapers[tag].filter(
+                lambda u: u.can_attack_ground
+                and u.type_id not in ALL_STRUCTURES
+                and not u.is_memory
             )
 
             reaper_maneuver: CombatManeuver = CombatManeuver()
@@ -154,8 +160,11 @@ class ReaperHarass(BaseUnit):
         if not close_unit.is_memory:
             # close unit is not chasing reaper, throw aggressive grenade
             # TODO: Look for clumps etc a clump of workers
-            if not close_unit.is_facing(unit, angle_error=0.1) and self.ai.is_visible(
-                close_unit
+            if (
+                not close_unit.is_facing(unit)
+                and self.ai.is_visible(close_unit)
+                and cy_distance_to(close_unit.position, unit.position)
+                < self.reaper_grenade_range + close_unit.radius
             ):
                 grenade_maneuver.add(
                     UseAbility(
@@ -193,36 +202,57 @@ class ReaperHarass(BaseUnit):
         reaper_harass_maneuver: CombatManeuver = CombatManeuver()
 
         in_attack_range: list[Unit] = cy_in_attack_range(unit, threats_near_reaper)
-        enemy_workers: Units = threats_near_reaper.filter(
-            lambda u: u.type_id in WORKER_TYPES
-        )
+        melee_units: Units = threats_near_reaper.filter(lambda u: u.ground_range < 3)
         light: Units = threats_near_reaper.filter(
             lambda u: u.is_light and not u.is_memory
         )
+        only_melee: bool = len(melee_units) == len(threats_near_reaper)
 
         enemy_target: Optional[Unit] = None
-        if enemy_workers:
-            enemy_target = cy_pick_enemy_target(enemy_workers)
+        if melee_units:
+            enemy_target = cy_pick_enemy_target(melee_units)
         # only light units around, pick a target
         elif len(light) == len(threats_near_reaper):
             enemy_target = cy_pick_enemy_target(light)
 
         if in_attack_range:
-            reaper_harass_maneuver.add(
-                StutterUnitBack(
-                    unit=unit,
-                    target=cy_pick_enemy_target(in_attack_range),
-                    kite_via_pathing=True,
-                    grid=reaper_grid,
-                )
+            closest_enemy: Unit = cy_closest_to(unit.position, threats_near_reaper)
+            closest_enemy_dist: float = cy_distance_to(
+                unit.position, closest_enemy.position
             )
+            target_unit: Unit = cy_pick_enemy_target(in_attack_range)
+            # enemy are a bit too close, run away
+            if closest_enemy_dist < 2.5:
+                reaper_harass_maneuver.add(KeepUnitSafe(unit=unit, grid=reaper_grid))
+            elif not only_melee or cy_is_facing(unit, enemy_target):
+                reaper_harass_maneuver.add(
+                    StutterUnitBack(
+                        unit=unit,
+                        target=target_unit,
+                        kite_via_pathing=True,
+                        # idea here is not to jump down cliff if kiting melee enemy
+                        grid=reaper_grid
+                        if not only_melee
+                        else self.mediator.get_ground_grid,
+                    )
+                )
+            else:
+                reaper_harass_maneuver.add(
+                    StutterUnitForward(unit=unit, target=target_unit)
+                )
 
         elif enemy_target:
             # get in range of enemy target, at the safest possible cell
+            # we out range the enemy so try to star in range
+            if enemy_target.ground_range < unit.ground_range:
+                radius: float = unit.ground_range + unit.radius + enemy_target.radius
+            # else try to get out of the way
+            else:
+                radius: float = 10.0
             safest_spot: Point2 = self.mediator.find_closest_safe_spot(
                 from_pos=enemy_target.position,
                 grid=reaper_grid,
-                radius=5.0 + enemy_target.radius + unit.radius,
+                radius=radius,
             )
             reaper_harass_maneuver.add(
                 PathUnitToTarget(

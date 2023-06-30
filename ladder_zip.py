@@ -23,19 +23,11 @@ CONFIG_FILE: str = "config.yml"
 if platform.system() == "Windows":
     FILETYPES_TO_IGNORE: Tuple = (".c", ".so", "pyx")
     ROOT_DIRECTORY = "./"
-    ZIP_FILES: List[str] = [
-        "config.yml",
-        "ladder.py",
-        "run.py",
-    ]
+    ZIP_FILES: List[str] = ["config.yml", "ladder.py", "run.py", "terran_builds.yml"]
 else:
     FILETYPES_TO_IGNORE: Tuple = (".c", ".pyd", "pyx", "pyi")
     ROOT_DIRECTORY = "./"
-    ZIP_FILES: List[str] = [
-        "config.yml",
-        "ladder.py",
-        "run.py",
-    ]
+    ZIP_FILES: List[str] = ["config.yml", "ladder.py", "run.py", "terran_builds.yml"]
 
 ZIP_DIRECTORIES: Dict[str, Dict] = {
     "bot": {"zip_all": True, "folder_to_zip": "bot"},
@@ -132,8 +124,9 @@ def check_config_values():
         config = yaml.safe_load(f)
     assert not config["Debug"], "Debug is not False"
 
+
 def get_zipfile_name() -> str:
-    """ Attempt to get bot name from config."""
+    """Attempt to get bot name from config."""
     __user_config_location__: str = path.abspath(".")
     user_config_path: str = path.join(__user_config_location__, CONFIG_FILE)
     zipfile_name = ZIPFILE_NAME
@@ -158,6 +151,7 @@ def on_error(func, path, exc_info):
     Usage : ``shutil.rmtree(path, onerror=onerror)``
     """
     import stat
+
     # Is the error an access error?
     if not os.access(path, os.W_OK):
         os.chmod(path, stat.S_IWUSR)
@@ -207,5 +201,3 @@ if __name__ == "__main__":
         shutil.rmtree(destination_directory, onerror=on_error)
 
     print(f"Ladder zip complete.")
-
-
