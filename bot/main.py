@@ -7,12 +7,14 @@ from sc2.ids.ability_id import AbilityId
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.unit import Unit
 
+from ares.cython_extensions.geometry import cy_distance_to
 from bot.consts import NON_COMBAT_UNIT_TYPES
 from bot.managers.combat_manager import CombatManager
 from bot.managers.drop_manager import DropManager
 from bot.managers.orbital_manager import OrbitalManager
 from bot.managers.reaper_harass_manager import ReaperHarassManager
 from bot.managers.scout_manager import ScoutManager
+from bot.managers.worker_defence_manager import WorkerDefenceManager
 
 
 class MyBot(AresBot):
@@ -74,6 +76,7 @@ class MyBot(AresBot):
                 OrbitalManager(self, self.config, manager_mediator),
                 ReaperHarassManager(self, self.config, manager_mediator),
                 ScoutManager(self, self.config, manager_mediator),
+                WorkerDefenceManager(self, self.config, manager_mediator),
             ],
         )
 
@@ -89,19 +92,21 @@ class MyBot(AresBot):
     async def on_building_construction_complete(self, unit: Unit) -> None:
         await super(MyBot, self).on_building_construction_complete(unit)
 
-        if unit.type_id == UnitID.BARRACKSREACTOR and self.opening_build == "OneOneOne":
+        if unit.type_id == UnitID.BARRACKSREACTOR and "OneOneOne" in self.opening_build:
             self.spawn_controller_active = True
 
-    # async def on_end(self, game_result: Result) -> None:
-    #     await super(MyBot, self).on_end(game_result)
-    #
-    #     # custom on_end logic here ...
-    #
+    async def on_unit_took_damage(self, unit: Unit, amount_damage_taken: float) -> None:
+        await super(MyBot, self).on_unit_took_damage(unit, amount_damage_taken)
 
-    #
-
-    #
-    # async def on_unit_took_damage(self, unit: Unit, amount_damage_taken: float) -> None:
-    #     await super(MyBot, self).on_unit_took_damage(unit, amount_damage_taken)
-    #
-    #     # custom on_unit_took_damage logic here ...
+        compare_health: float = max(50.0, unit.health_max * 0.09)
+        if unit.health < compare_health:
+            unit(AbilityId.CANCEL_BUILDINPROGRESS)
+            scvs: list[Unit] = [
+                scv
+                for scv in self.mediator.get_units_from_role(
+                    role=UnitRole.BUILDING, unit_type=UnitID.SCV
+                )
+                if cy_distance_to(scv.position, unit.position) < 2.6
+            ]
+            for scv in scvs:
+                self.mediator.assign_role(tag=scv.tag, role=UnitRole.GATHERING)

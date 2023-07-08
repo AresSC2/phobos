@@ -83,7 +83,11 @@ class CombatManager(Manager):
                     self.ai.game_info.map_center, 5.0
                 )
                 for a in attackers:
-                    if cy_distance_to(a.position, rally_point) > 5:
+                    if (
+                        enemy := self.manager_mediator.get_main_ground_threats_near_townhall
+                    ):
+                        a.attack(cy_closest_to(a.position, enemy))
+                    elif cy_distance_to(a.position, rally_point) > 5:
                         a.attack(rally_point)
                     elif a.type_id == UnitID.WIDOWMINE:
                         a(AbilityId.BURROWDOWN_WIDOWMINE)
@@ -109,10 +113,7 @@ class CombatManager(Manager):
                 and len(near_ground) > 1
             ):
                 u(AbilityId.SIEGEMODE_SIEGEMODE)
-            elif (
-                u.type_id == UnitID.SIEGETANKSIEGED
-                and not near_ground
-            ):
+            elif u.type_id == UnitID.SIEGETANKSIEGED and not near_ground:
                 u(AbilityId.UNSIEGE_UNSIEGE)
             else:
                 u.attack(target)
