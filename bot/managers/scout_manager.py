@@ -52,11 +52,13 @@ class ScoutManager(Manager):
         self._scout_points_behind_natural: list[Point2] = []
         self._scv_points_to_check: dict[Race, list[Point2]] = {
             Race.Protoss: [],
+            Race.Random: [],
             Race.Terran: [],
             Race.Zerg: [],
         }
         self._scv_scout_start_time: dict[Race, float] = {
             Race.Protoss: 44.0,
+            Race.Random: 44.0,
             Race.Terran: 44.0,
             Race.Zerg: 44.0,
         }

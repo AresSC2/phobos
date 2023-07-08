@@ -10,6 +10,7 @@ from ares.behaviors.combat.individual import (
     StutterUnitBack,
     StutterUnitForward,
     UseAbility,
+    AttackTarget,
 )
 from ares.consts import ALL_STRUCTURES, UnitTreeQueryType
 from ares.cython_extensions.combat_utils import cy_pick_enemy_target, cy_is_facing
@@ -17,6 +18,7 @@ from ares.cython_extensions.geometry import cy_distance_to
 from ares.cython_extensions.units_utils import cy_closest_to, cy_in_attack_range
 from ares.managers.manager_mediator import ManagerMediator
 from sc2.ids.ability_id import AbilityId
+from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.position import Point2
 from sc2.unit import Unit
 from sc2.units import Units
@@ -85,6 +87,13 @@ class ReaperHarass(BaseUnit):
             query_tree=UnitTreeQueryType.AllEnemy,
             return_as_dict=True,
         )
+        proxy_pylons: list[Unit] = [
+            s
+            for s in self.ai.get_enemy_proxies(
+                distance=85.0, from_position=self.ai.start_location
+            )
+            if s.type_id == UnitID.PYLON
+        ]
 
         avoidance_grid = self.mediator.get_ground_avoidance_grid
         reaper_grid = self.mediator.get_climber_grid
@@ -94,6 +103,9 @@ class ReaperHarass(BaseUnit):
             target: Point2 = reaper_to_target_tracker[tag]
             unit_pos: Point2 = unit.position
 
+            pylons: Units = everything_near_reapers[tag].filter(
+                lambda u: u.type_id == UnitID.PYLON
+            )
             # get units near the reaper that can damage it
             threats_near_reaper: Units = everything_near_reapers[tag].filter(
                 lambda u: u.can_attack_ground
@@ -127,11 +139,17 @@ class ReaperHarass(BaseUnit):
                 self.ai.register_behavior(reaper_maneuver)
                 continue
 
-            # no threats near reaper, get to target
+            # no threats near reaper, get to target or handle proxy pylons
             if not threats_near_reaper:
-                reaper_maneuver.add(
-                    PathUnitToTarget(unit=unit, grid=reaper_grid, target=target)
-                )
+                # proxy pylons
+                if len(proxy_pylons) > 0 and pylons:
+                    reaper_maneuver.add(
+                        AttackTarget(unit, cy_closest_to(unit_pos, pylons))
+                    )
+                else:
+                    reaper_maneuver.add(
+                        PathUnitToTarget(unit=unit, grid=reaper_grid, target=target)
+                    )
 
             # else threats are around
             else:
@@ -158,14 +176,31 @@ class ReaperHarass(BaseUnit):
         close_unit: Unit = cy_closest_to(unit_pos, threats_near_reaper)
         # only throw grenades if the closest unit is visible
         if not close_unit.is_memory:
+            facing: bool = close_unit.is_facing(unit)
             # close unit is not chasing reaper, throw aggressive grenade
-            # TODO: Look for clumps etc a clump of workers
-            if (
-                not close_unit.is_facing(unit)
-                and self.ai.is_visible(close_unit)
+            if facing:
+                if path_to_target := self.mediator.find_raw_path(
+                    start=unit_pos,
+                    target=target,
+                    grid=reaper_grid,
+                    sensitivity=1,
+                ):
+                    grenade_maneuver.add(
+                        PlacePredictiveAoE(
+                            unit=unit,
+                            path=path_to_target[:30],
+                            enemy_center_unit=close_unit,
+                            aoe_ability=AbilityId.KD8CHARGE_KD8CHARGE,
+                            # TODO: verify, currently based on experimental evidence
+                            ability_delay=34,
+                        )
+                    )
+            elif (
+                self.ai.is_visible(close_unit)
                 and cy_distance_to(close_unit.position, unit.position)
                 < self.reaper_grenade_range + close_unit.radius
             ):
+                # TODO: Look for clumps etc a clump of workers
                 grenade_maneuver.add(
                     UseAbility(
                         ability=AbilityId.KD8CHARGE_KD8CHARGE,
@@ -173,23 +208,7 @@ class ReaperHarass(BaseUnit):
                         target=close_unit.position,
                     )
                 )
-            # get path to target for predictive AoE
-            elif path_to_target := self.mediator.find_raw_path(
-                start=unit_pos,
-                target=target,
-                grid=reaper_grid,
-                sensitivity=1,
-            ):
-                grenade_maneuver.add(
-                    PlacePredictiveAoE(
-                        unit=unit,
-                        path=path_to_target[:30],
-                        enemy_center_unit=close_unit,
-                        aoe_ability=AbilityId.KD8CHARGE_KD8CHARGE,
-                        # TODO: verify, currently based on experimental evidence
-                        ability_delay=34,
-                    )
-                )
+
         return grenade_maneuver
 
     def _reaper_harass_engagement(
@@ -222,7 +241,7 @@ class ReaperHarass(BaseUnit):
             )
             target_unit: Unit = cy_pick_enemy_target(in_attack_range)
             # enemy are a bit too close, run away
-            if closest_enemy_dist < 2.5:
+            if closest_enemy_dist < 2.5 and not unit.is_attacking:
                 reaper_harass_maneuver.add(KeepUnitSafe(unit=unit, grid=reaper_grid))
             elif not only_melee or cy_is_facing(unit, enemy_target):
                 reaper_harass_maneuver.add(

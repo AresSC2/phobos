@@ -1,8 +1,12 @@
 """Handle Reaper Harass."""
 from typing import TYPE_CHECKING, Dict, Set
 
+from sc2.data import Race
+from sc2.unit import Unit
+
 from ares import ManagerMediator
-from ares.consts import UnitRole
+from ares.consts import UnitRole, UnitTreeQueryType
+from ares.cython_extensions.units_utils import cy_closest_to
 from ares.managers.manager import Manager
 from sc2.ids.unit_typeid import UnitTypeId as UnitID
 from sc2.position import Point2
@@ -54,7 +58,6 @@ class ReaperHarassManager(Manager):
         self._execute_harass()
 
     def _assign_reaper_harass(self) -> None:
-        # TODO: add logic
         if reapers := self.manager_mediator.get_own_army_dict.get(UnitID.REAPER, None):
             self.manager_mediator.batch_assign_role(
                 tags=reapers.tags, role=UnitRole.HARASSING
@@ -73,9 +76,15 @@ class ReaperHarassManager(Manager):
                 if reaper.health_percentage < self.reaper_retreat_threshold:
                     self.healing_reaper_tags.add(reaper.tag)
 
-                # assign the reaper a target if its tag isn't in the healing tracking
-                # if reaper.tag not in self.healing_reaper_tags:
-                self._reaper_to_target_tracker[reaper.tag] = self.reaper_harass_target
+                # assign the reaper a target
+                target: Point2 = self.reaper_harass_target
+                if (
+                    self.ai.enemy_race == Race.Zerg
+                    and self.manager_mediator.get_main_ground_threats_near_townhall
+                ):
+                    target = self.ai.main_base_ramp.top_center
+
+                self._reaper_to_target_tracker[reaper.tag] = target
 
     def _unassign_harass(self) -> None:
         # TODO: do something

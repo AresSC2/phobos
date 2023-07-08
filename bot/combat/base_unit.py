@@ -1,4 +1,6 @@
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, Union
+
+from sc2.units import Units
 
 from ares.managers.manager_mediator import ManagerMediator
 from sc2.unit import Unit
@@ -24,7 +26,7 @@ class BaseUnit(Protocol):
     config: dict
     mediator: ManagerMediator
 
-    def execute(self, units: list[Unit], **kwargs) -> None:
+    def execute(self, units: Union[list[Unit], Units], **kwargs) -> None:
         """Execute the implemented behavior.
 
         This should be called every step.

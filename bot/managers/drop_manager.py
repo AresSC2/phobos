@@ -57,7 +57,7 @@ class DropManager(Manager):
 
     def _assign_mine_drops(self) -> None:
         if (
-            self.ai.build_order_runner.chosen_opening == "OneOneOne"
+            "OneOneOne" in self.ai.build_order_runner.chosen_opening
             and not self._assigned_111_mine_drop
             and not self.manager_mediator.get_main_ground_threats_near_townhall
         ):
@@ -100,11 +100,21 @@ class DropManager(Manager):
         )
 
     def _unassign_mine_drops(self, switch_to: UnitRole) -> None:
+        if not self._medivac_tag_to_mine_tracker:
+            return
+
+        # give up completely if enemy has air-to-air
+        dangerous_fliers: Units = self.manager_mediator.get_enemy_fliers.filter(
+            lambda u: u.can_attack_air
+        )
         # unassign units from mine drop if medivac or assigned mines have died
         for med_tag, mine_tracker in self._medivac_tag_to_mine_tracker.items():
             if medivac := self.ai.unit_tag_dict.get(med_tag, None):
                 # deal with low health medivac, assign mines to drop attack
-                if medivac.health_percentage <= self.MIN_HEALTH_MEDIVAC_PERC:
+                if (
+                    medivac.health_percentage <= self.MIN_HEALTH_MEDIVAC_PERC
+                    or dangerous_fliers
+                ):
                     self.manager_mediator.assign_role(tag=medivac.tag, role=switch_to)
                     self.manager_mediator.batch_assign_role(
                         tags=mine_tracker["mine_tags"],
